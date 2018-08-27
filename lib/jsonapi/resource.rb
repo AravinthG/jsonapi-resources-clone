@@ -20,6 +20,10 @@ module JSONAPI
                                        :remove_to_one_link,
                                        :replace_fields
 
+    @@_processor_class = nil
+    @@_default_attributes = []
+    @@_joint_record_table = false
+
     def initialize(model, context)
       @model = model
       @context = context
@@ -119,7 +123,11 @@ module JSONAPI
 
     # Override this on a resource instance to override the fetchable keys
     def fetchable_fields
-      self.class.fields
+      if context[:only_default_attributes].present?
+        self.class.default_attributes
+      else
+        self.class.fields
+      end
     end
 
     def model_error_messages
@@ -654,6 +662,11 @@ module JSONAPI
         model_hint(model: @_model_name, resource: self) unless options[:add_model_hint] == false
 
         rebuild_relationships(_relationships)
+
+        if model.constantize.ancestors.include?(JointRecord::Base)
+          @@_joint_record_table = true
+          attributes :all_attributes, :additional_data
+        end
       end
 
       def model_hint(model: _model_name, resource: _type)
@@ -746,8 +759,13 @@ module JSONAPI
       def verify_filters(filters, context = nil)
         verified_filters = {}
         filters.each do |filter, raw_value|
-          verified_filter = verify_filter(filter, raw_value, context)
-          verified_filters[verified_filter[0]] = verified_filter[1]
+          if raw_value.is_a?(Hash)
+            verified_filter = verify_filter(filter, raw_value[:value], context)
+            verified_filters[verified_filter[0]] = {value: verified_filter[1].flatten, operator: raw_value[:operator]}
+          else
+            verified_filter = verify_filter(filter, raw_value, context)
+            verified_filters[verified_filter[0]] = verified_filter[1].flatten
+          end
         end
         verified_filters
       end
@@ -1052,6 +1070,27 @@ module JSONAPI
       def register_relationship(name, relationship_object)
         @_relationships[name] = relationship_object
       end
+
+      ## By default processor is assumed to be in the same namespace as resource
+      ## Hence adding a way for manually specifying the processor class
+      def processor(processor_class)
+        @@_processor_class = processor_class
+      end
+
+      def get_processor_class
+        @@_processor_class
+      end
+
+      def set_default_attributes(*attrs)
+        @@_default_attributes += attrs.flatten.map(&:to_sym)
+        @@_default_attributes.uniq!
+      end
+
+      def default_attributes
+        return @@_default_attributes if @@_default_attributes.present?
+        @@_default_attributes = _model_class.column_names.map(&:to_sym)
+      end
+
 
       private
 

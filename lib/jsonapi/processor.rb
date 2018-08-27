@@ -39,6 +39,14 @@ module JSONAPI
       @result = JSONAPI::ErrorsOperationResult.new(e.errors[0].code, e.errors)
     end
 
+    def method_missing(m, *args, &block)
+      if (m.to_s.starts_with?('_run_') && m.to_s.ends_with?('_callbacks'))
+        yield
+      else
+        super
+      end
+    end
+
     def find
       filters = params[:filters]
       include_directives = params[:include_directives]

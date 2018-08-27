@@ -79,7 +79,8 @@ module JSONAPI
         return
       end
 
-      request_parser = JSONAPI::RequestParser.new(
+      request_parser_klass = @_use_custom_klass.present? ? JSONAPI::CustomRequestParser : JSONAPI::RequestParser
+      request_parser = request_parser_klass.new(
           params,
           context: context,
           key_formatter: key_formatter,
@@ -143,7 +144,7 @@ module JSONAPI
     end
 
     def resource_serializer_klass
-      @resource_serializer_klass ||= JSONAPI::ResourceSerializer
+      @resource_serializer_klass ||= JSONAPI::CustomResourceSerializer
     end
 
     def base_url
@@ -177,6 +178,7 @@ module JSONAPI
     end
 
     def valid_accept_media_type?
+      return true if @_direct_method_call.present?
       media_types = media_types_for('Accept')
 
       media_types.blank? || media_types.any? do |media_type|
@@ -234,7 +236,7 @@ module JSONAPI
         render_options[:json] = content
       else
         # Bypassing ActiveSupport allows us to use CompiledJson objects for cached response fragments
-        render_options[:body] = JSON.generate(content)
+        render_options[:body] = @_direct_method_call.present? ? content : JSON.generate(content)
 
         if (response_document.status == 201 && content[:data].class != Array) &&
             content['data'] && content['data']['links'] && content['data']['links']['self']
@@ -244,14 +246,20 @@ module JSONAPI
 
       # For whatever reason, `render` ignores :status and :content_type when :body is set.
       # But, we can just set those values directly in the Response object instead.
-      response.status = response_document.status
-      response.headers['Content-Type'] = JSONAPI::MEDIA_TYPE
 
-      render(render_options)
+      if @_direct_method_call.blank?
+        response.status = response_document.status
+        response.headers['Content-Type'] = JSONAPI::MEDIA_TYPE
+
+        render(render_options)
+      else
+        response_document.has_errors? ? render_options[:json] : render_options[:body]
+      end
     end
 
     def create_response_document
-      JSONAPI::ResponseDocument.new(
+      response_document_klass = @_use_custom_klass.present? ? JSONAPI::CustomResponseDocument : JSONAPI::ResponseDocument
+      response_document_klass.new(
           key_formatter: key_formatter,
           base_meta: base_meta,
           base_links: base_response_links,
@@ -278,14 +286,13 @@ module JSONAPI
             end
 
             # Store exception for other middlewares
-            request.env['action_dispatch.exception'] ||= e
+            request.env['action_dispatch.exception'] ||= e if @_direct_method_call.blank?
 
             internal_server_error = JSONAPI::Exceptions::InternalServerError.new(e)
             Rails.logger.error { "Internal Server Error: #{e.message} #{e.backtrace.join("\n")}" }
             errors = internal_server_error.errors
           end
       end
-
       response_document.add_result(JSONAPI::ErrorsOperationResult.new(errors[0].status, errors), nil)
     end
 
