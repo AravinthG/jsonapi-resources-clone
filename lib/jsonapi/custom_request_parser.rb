@@ -50,8 +50,9 @@ module JSONAPI
     def parse_fields(resource_klass, fields)
       extracted_fields = {}
       if fields.nil?
-        context[:only_default_attributes] = true
-        return extracted_fields
+        # context[:only_default_attributes] = true
+        # return extracted_fields
+        fields = {resource_klass.model_hint => '__all_attributes__'}
       end
 
       # Extract the fields for each type from the fields parameters
@@ -59,7 +60,7 @@ module JSONAPI
         fields.each do |field, value|
           next if value.blank?
           value = value.split(',') if value.is_a? String
-          value = ['__all_attributes__'] if value.include?('__all_attributes__')
+          # value = ['__all_attributes__'] if value.include?('__all_attributes__')
           resource_fields = modify_field_values(value)
           extracted_fields[field] = resource_fields
         end
