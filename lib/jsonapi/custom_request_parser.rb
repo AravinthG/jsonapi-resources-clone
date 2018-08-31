@@ -43,7 +43,10 @@ module JSONAPI
         sort_criteria: sort_criteria,
         paginator: paginator,
         fields: fields,
-        relationship_type: relationship_type
+        relationship_type: relationship_type,
+        data: params[:data],
+        additional_args: params.except(:context, :filters, :include_directives, :sort_criteria, :paginator, :fields,
+                                       :relationship_type, :data)
       )
     end
 
