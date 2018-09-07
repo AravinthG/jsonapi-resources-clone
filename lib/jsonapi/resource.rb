@@ -23,7 +23,7 @@ module JSONAPI
     @@_processor_class = nil
     @@_default_attributes = []
     @@_joint_record_table = false
-    @@_has_custom_response_format = false
+    @@_has_custom_format = false
     @@_formatter_class = false
 
     def initialize(model, context)
