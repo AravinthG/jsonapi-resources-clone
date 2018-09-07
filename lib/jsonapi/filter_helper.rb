@@ -15,6 +15,10 @@ module JSONAPI
       filters.merge!({std: std_filters})
     end
 
+    def parse_filter_keys(filters, resource_klass, params)
+      resource_klass.get_custom_formatter_class.constantize.format_filter(filters, params)
+    end
+
     def filter_query_string(field_name, value)
       case value[:operator].to_sym
       when :not

@@ -32,6 +32,18 @@ module JSONAPI
       sort_criteria = parse_sort_criteria(resource_klass, params[:sort])
       paginator = parse_pagination(resource_klass, params[:page])
       relationship_type = params[:relationship].present? ? params[:relationship].to_sym : nil
+      data = params[:data]
+
+      if data.present?
+        allowed_fields = nil
+        if method_name.to_s.include?('create')
+          allowed_fields = resource_klass.creatable_fields(@context)
+        elsif method_name.to_s.include?('update')
+          allowed_fields = resource_klass.updatable_fields(@context)
+        end
+        allowed_fields ||= resource_klass.creatable_fields(@context)
+        data = parse_params(resource_klass, data, allowed_fields)
+      end
 
       ## parse additional data based on requirements
       JSONAPI::Operation.new(
@@ -44,10 +56,19 @@ module JSONAPI
         paginator: paginator,
         fields: fields,
         relationship_type: relationship_type,
-        data: params[:data],
+        data: data,
         additional_args: params.except(:context, :filters, :include_directives, :sort_criteria, :paginator, :fields,
                                        :relationship_type, :data)
       )
+    end
+
+    def parse_params(resource_klass, params, allowed_fields)
+      if resource_klass.has_custom_format?
+        attrs = params['attributes']
+        attributes = resource_klass.get_custom_formatter_class.constantize.format_create_update_params(attrs, @params)
+        params.merge!('attributes' => attributes)
+      end
+      super
     end
 
     def parse_fields(resource_klass, fields)
@@ -69,6 +90,12 @@ module JSONAPI
         end
       else
         fail JSONAPI::Exceptions::InvalidFieldFormat.new(error_object_overrides)
+      end
+
+      context[:original_select_fields] = extracted_fields
+
+      if resource_klass.has_custom_format?
+        extracted_fields = format_field_values(extracted_fields, resource_klass)
       end
 
       # Validate the fields
@@ -105,6 +132,10 @@ module JSONAPI
       validated_fields.deep_transform_keys { |key| unformat_key(key) }
     end
 
+    def format_field_values(fields, resource_klass)
+      resource_klass.get_custom_formatter_class.constantize.format_fields(fields, params)
+    end
+
     def modify_field_values(value)
       if value.include?('__all_attributes__')
         ['all_attributes']
@@ -128,6 +159,10 @@ module JSONAPI
       return parsed_filters unless filters
 
       filters = extract_special_filters(filters)
+
+      if resource_klass.has_custom_format?
+        filters = parse_filter_keys(filters, resource_klass, params)
+      end
 
       unless filters.class.method_defined?(:each)
         @errors.concat(JSONAPI::Exceptions::InvalidFiltersSyntax.new(filters).errors)

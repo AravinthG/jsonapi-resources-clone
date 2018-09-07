@@ -23,6 +23,8 @@ module JSONAPI
     @@_processor_class = nil
     @@_default_attributes = []
     @@_joint_record_table = false
+    @@_has_custom_response_format = false
+    @@_formatter_class = false
 
     def initialize(model, context)
       @model = model
@@ -123,11 +125,7 @@ module JSONAPI
 
     # Override this on a resource instance to override the fetchable keys
     def fetchable_fields
-      if context[:only_default_attributes].present?
-        self.class.default_attributes
-      else
-        self.class.fields
-      end
+      self.class.fields
     end
 
     def model_error_messages
@@ -1081,6 +1079,15 @@ module JSONAPI
         @@_processor_class
       end
 
+      def custom_formatter(formatter_class)
+        @@_has_custom_format = true
+        @@_formatter_class = formatter_class
+      end
+
+      def get_custom_formatter_class
+        @@_formatter_class
+      end
+
       def set_default_attributes(*attrs)
         @@_default_attributes += attrs.flatten.map(&:to_sym)
         @@_default_attributes.uniq!
@@ -1091,6 +1098,9 @@ module JSONAPI
         @@_default_attributes = _model_class.column_names.map(&:to_sym)
       end
 
+      def has_custom_format?
+        @@_has_custom_format
+      end
 
       private
 
