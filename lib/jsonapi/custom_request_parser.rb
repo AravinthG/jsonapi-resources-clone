@@ -34,7 +34,7 @@ module JSONAPI
       relationship_type = params[:relationship].present? ? params[:relationship].to_sym : nil
       data = params[:data]
 
-      if data.present?
+      if data.present? && params[:skip_data_validation].blank?
         allowed_fields = nil
         if method_name.to_s.include?('create')
           allowed_fields = resource_klass.creatable_fields(@context)
