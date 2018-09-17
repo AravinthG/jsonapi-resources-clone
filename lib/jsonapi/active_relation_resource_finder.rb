@@ -1,9 +1,13 @@
+require 'jsonapi/filter_helper'
+
 module JSONAPI
   module ActiveRelationResourceFinder
+
     def self.included(base)
       base.extend ClassMethods
+      base.extend ::JSONAPI::FilterHelper
     end
-
+    
     module ClassMethods
 
       # Finds Resources using the `filters`. Pagination and sort options are used when provided
@@ -496,7 +500,22 @@ module JSONAPI
         else
           filter = _attribute_delegated_name(filter)
           table_alias = options[:table_alias]
-          records.where(concat_table_field(table_alias, filter) => value)
+
+          if value.is_a?(Hash)
+            if value[:operator].to_sym != :std
+              if value[:operator].to_sym == :not
+                records.where.not(concat_table_field(table_alias, filter) => value[:value])
+              else
+                conds = filter_query_string(concat_table_field(table_alias, filter), value)
+                records.where(conds)
+              end
+            else
+              records.where(concat_table_field(table_alias, filter) => value[:value])
+            end
+          else
+            records.where(concat_table_field(table_alias, filter) => value)
+          end
+
         end
       end
 
